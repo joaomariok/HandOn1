@@ -65,6 +65,9 @@ wav_tool.exe <path_to_file.wav>
 
 ```
 HandOn1/
+├── .github/
+│   └── workflows/
+│       └── build.yml           # GitHub Actions: build, test, and package on push to main
 ├── .gitignore                  # Git ignore rules (build artifacts, IDE, OS files)
 ├── .vscode/
 │   └── c_cpp_properties.json  # IntelliSense config (delegates to CMake Tools)
@@ -94,6 +97,16 @@ ctest --test-dir build/vs2022 -C Release --output-on-failure
 ```
 
 Test categories: `[sanity]` (parser vs. test_file.wav), `[error]` (exception handling), `[unit]` (duration calculation).
+
+## CI/CD
+
+A GitHub Actions workflow (`.github/workflows/build.yml`) runs on every push to `main`:
+
+1. Configures and builds the project in Release mode
+2. Runs all Catch2 tests
+3. Packages source files + `wav_tool.exe` into a downloadable `WavTool-Release` artifact
+
+Artifacts are available in the **Actions** tab of the GitHub repository.
 
 ## Documentation
 

@@ -1,0 +1,48 @@
+name: Build & Package
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Build Release
+        run: cmake --build build/ci --config Release
+
+      - name: Run tests
+        run: ctest --test-dir build/ci -C Release --output-on-failure
+
+      - name: Prepare artifact
+        run: |
+          mkdir artifact\WavTool\src
+          mkdir artifact\WavTool\tests
+          copy *.h artifact\WavTool\src\
+          copy *.cpp artifact\WavTool\src\
+          copy CMakeLists.txt artifact\WavTool\
+          copy CMakePresets.json artifact\WavTool\
+          copy README.md artifact\WavTool\
+          copy .gitignore artifact\WavTool\
+          copy tests\* artifact\WavTool\tests\
+          copy build\ci\wav_tool.exe artifact\WavTool\
+        shell: cmd
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WavTool-Release
+          path: artifact/WavTool/
+          retention-days: 90

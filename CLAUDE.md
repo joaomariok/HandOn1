@@ -95,6 +95,15 @@ Test categories:
 - `[error]` — verifies exception handling for invalid inputs
 - `[unit]` — tests `WavMetadata::duration()` with synthetic values
 
+## CI/CD
+
+- GitHub Actions workflow: `.github/workflows/build.yml`
+- Triggers on every push to `main`
+- Runs on `windows-latest` with MSVC via `ilammy/msvc-dev-cmd@v1`
+- Uses the `ci` CMake preset (Ninja generator) — the VS2022 generator is not available on GitHub runners
+- Steps: configure → build Release → run tests → package artifact
+- Artifact `WavTool-Release`: contains source files, tests, and `wav_tool.exe`
+
 ## VS Code Configuration
 
 - `.vscode/c_cpp_properties.json` — IntelliSense config: delegates to CMake Tools extension (`ms-vscode.cmake-tools`) for include paths, defines, and compiler settings.

@@ -9,6 +9,14 @@
                 "strategy": "set"
             },
             "binaryDir": "${sourceDir}/build/vs2022"
+        },
+        {
+            "name": "ci",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build/ci",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release"
+            }
         }
     ],
     "buildPresets": [
@@ -20,6 +28,11 @@
         {
             "name": "windows-vs2022-release",
             "configurePreset": "windows-vs2022",
+            "configuration": "Release"
+        },
+        {
+            "name": "ci-release",
+            "configurePreset": "ci",
             "configuration": "Release"
         }
     ]
