@@ -42,20 +42,25 @@ T readLE(std::ifstream& file) {
 }
 
 /**
- * @brief Compares a 4-byte chunk ID against a null-terminated string tag.
+ * @brief Compares a chunk ID against a null-terminated string tag.
  *
- * @param id  The 4-byte chunk ID read from the RIFF file (not null-terminated).
+ * @param id  The chunk ID read from the RIFF file (CHUNK_ID_SIZE bytes, not null-terminated).
  * @param tag The expected chunk ID as a null-terminated C string (e.g., "fmt ", "data").
- * @return true if the first 4 bytes of id match tag, false otherwise.
+ * @return true if the first CHUNK_ID_SIZE bytes of id match tag, false otherwise.
  */
-bool idEquals(const char id[4], const char* tag) {
-    return std::memcmp(id, tag, 4) == 0;
+bool idEquals(const char id[CHUNK_ID_SIZE], const char* tag) {
+    return std::memcmp(id, tag, CHUNK_ID_SIZE) == 0;
 }
 
 } // namespace
 
 /** @copydoc readWavFile */
 WavMetadata readWavFile(const std::string& filePath) {
+    constexpr const char* RIFF_ID       = "RIFF";
+    constexpr const char* WAVE_ID       = "WAVE";
+    constexpr const char* FMT_CHUNK_ID  = "fmt ";
+    constexpr const char* DATA_CHUNK_ID = "data";
+
     std::ifstream file(filePath, std::ios::binary);
     if (!file) {
         throw std::runtime_error("Could not open file: " + filePath);
@@ -64,16 +69,16 @@ WavMetadata readWavFile(const std::string& filePath) {
     // --- RIFF container envelope ---
     RiffChunkHeader riffHeader;
     riffHeader.chunkSize = 0;
-    file.read(riffHeader.chunkId, 4);
+    file.read(riffHeader.chunkId, CHUNK_ID_SIZE);
     riffHeader.chunkSize = readLE<uint32_t>(file);
 
-    if (!idEquals(riffHeader.chunkId, "RIFF")) {
+    if (!idEquals(riffHeader.chunkId, RIFF_ID)) {
         throw std::runtime_error("Not a RIFF file");
     }
 
-    char formType[4];
-    file.read(formType, 4);
-    if (!idEquals(formType, "WAVE")) {
+    char formType[CHUNK_ID_SIZE];
+    file.read(formType, CHUNK_ID_SIZE);
+    if (!idEquals(formType, WAVE_ID)) {
         throw std::runtime_error("Not a WAVE file");
     }
 
@@ -84,14 +89,14 @@ WavMetadata readWavFile(const std::string& filePath) {
 
     while (file && !foundData) {
         RiffChunkHeader subHeader;
-        file.read(subHeader.chunkId, 4);
+        file.read(subHeader.chunkId, CHUNK_ID_SIZE);
         subHeader.chunkSize = readLE<uint32_t>(file);
 
         if (!file) {
             break;
         }
 
-        if (idEquals(subHeader.chunkId, "fmt ")) {
+        if (idEquals(subHeader.chunkId, FMT_CHUNK_ID)) {
             if (subHeader.chunkSize < sizeof(FmtChunk)) {
                 throw std::runtime_error("fmt chunk too small");
             }
@@ -109,12 +114,12 @@ WavMetadata readWavFile(const std::string& filePath) {
             meta.numChannels   = fmt.numChannels;
             foundFmt = true;
 
-            // Skip any extra bytes in the fmt chunk beyond the base 16
-            uint32_t extraBytes = subHeader.chunkSize - 16;
+            // Skip any extra bytes in the fmt chunk beyond FMT_BASE_SIZE
+            uint32_t extraBytes = subHeader.chunkSize - FMT_BASE_SIZE;
             if (extraBytes > 0) {
                 file.seekg(extraBytes, std::ios::cur);
             }
-        } else if (idEquals(subHeader.chunkId, "data")) {
+        } else if (idEquals(subHeader.chunkId, DATA_CHUNK_ID)) {
             meta.dataOffset = static_cast<uint32_t>(file.tellg());
             meta.dataSize   = subHeader.chunkSize;
             foundData = true;

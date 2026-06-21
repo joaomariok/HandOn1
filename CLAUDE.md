@@ -39,7 +39,9 @@ Run: `build\vs2022\Release\wav_tool.exe <path_to_file.wav>`
 ## Architecture
 
 ### `wav_types.h` — Type definitions (POD structs, no logic except `duration()`)
-- `RiffChunkHeader` — `chunkId[4]` + `chunkSize` (used to walk RIFF chunk list)
+- `CHUNK_ID_SIZE` — constexpr, size of a RIFF chunk ID in bytes (4)
+- `FMT_BASE_SIZE` — constexpr, size of the base FmtChunk payload in bytes (16)
+- `RiffChunkHeader` — `chunkId[CHUNK_ID_SIZE]` + `chunkSize` (used to walk RIFF chunk list)
 - `FmtChunk` — full fmt sub-chunk fields: `audioFormat`, `numChannels`, `sampleRate`, `byteRate`, `blockAlign`, `bitsPerSample`
 - `WavMetadata` — aggregated result: `sampleRate`, `bitsPerSample`, `numChannels`, `dataOffset`, `dataSize`
   - `double duration()` — computes `dataSize / (sampleRate * numChannels * (bitsPerSample / 8))`
@@ -49,7 +51,7 @@ Run: `build\vs2022\Release\wav_tool.exe <path_to_file.wav>`
 - **Public API**: `WavMetadata readWavFile(const std::string& filePath)`
 - **Internal helpers** (anonymous namespace):
   - `template<typename T> T readLE(std::ifstream&)` — reads sizeof(T) bytes as little-endian value
-  - `bool idEquals(const char id[4], const char* tag)` — 4-byte chunk ID comparison
+  - `bool idEquals(const char id[CHUNK_ID_SIZE], const char* tag)` — chunk ID comparison
 - **Algorithm**: reads RIFF envelope (12 bytes: "RIFF" + size + "WAVE"), then loops reading chunk headers (ID + size). Processes "fmt " and "data", skips unknown chunks with RIFF padding.
 - **Errors**: throws `std::runtime_error` for: file not found, not RIFF, not WAVE, missing fmt, missing data, unexpected EOF
 

@@ -10,6 +10,12 @@
 
 #include <cstdint>
 
+/// Size of a RIFF chunk ID in bytes.
+constexpr int CHUNK_ID_SIZE = 4;
+
+/// Size of the base FmtChunk payload in bytes (PCM format, no extensions).
+constexpr uint32_t FMT_BASE_SIZE = 16;
+
 /**
  * @brief Generic RIFF chunk header used during chunk-list traversal.
  *
@@ -17,8 +23,8 @@
  * to identify the chunk type and determine how many bytes to read or skip.
  */
 struct RiffChunkHeader {
-    /// 4-byte ASCII identifier (e.g., "fmt ", "data", "LIST"). Not null-terminated.
-    char chunkId[4];
+    /// ASCII identifier (e.g., "fmt ", "data", "LIST"). Not null-terminated.
+    char chunkId[CHUNK_ID_SIZE];
     /// Size of the chunk payload in bytes. Excludes the 8-byte header itself.
     uint32_t chunkSize;
 };
