@@ -1,0 +1,67 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug wav_tool (test file)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/vs2022/Debug/wav_tool.exe",
+            "args": ["tests/test_file.wav"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        {
+            "name": "Release wav_tool (test file)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/vs2022/Release/wav_tool.exe",
+            "args": ["tests/test_file.wav"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Release"
+        },
+        {
+            "name": "Debug wav_tool (custom file)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/vs2022/Debug/wav_tool.exe",
+            "args": ["${input:wavFilePath}"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        {
+            "name": "Debug wav_tool (active file)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/vs2022/Debug/wav_tool.exe",
+            "args": ["${file}"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        {
+            "name": "Debug Tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/vs2022/Debug/wav_tests.exe",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        {
+            "name": "Attach to Process",
+            "type": "cppvsdbg",
+            "request": "attach"
+        }
+    ],
+    "inputs": [
+        {
+            "id": "wavFilePath",
+            "type": "promptString",
+            "description": "Path to WAV file",
+            "default": "tests/test_file.wav"
+        }
+    ]
+}

@@ -23,6 +23,8 @@ out/
 # VS Code (keep IntelliSense config)
 .vscode/*
 !.vscode/c_cpp_properties.json
+!.vscode/launch.json
+!.vscode/tasks.json
 
 # OS files
 Thumbs.db

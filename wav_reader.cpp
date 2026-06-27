@@ -102,11 +102,11 @@ WavMetadata readWavFile(const std::string& filePath) {
             }
 
             FmtChunk fmt;
-            fmt.audioFormat  = readLE<uint16_t>(file);
-            fmt.numChannels  = readLE<uint16_t>(file);
-            fmt.sampleRate   = readLE<uint32_t>(file);
-            fmt.byteRate     = readLE<uint32_t>(file);
-            fmt.blockAlign   = readLE<uint16_t>(file);
+            fmt.audioFormat   = readLE<uint16_t>(file);
+            fmt.numChannels   = readLE<uint16_t>(file);
+            fmt.sampleRate    = readLE<uint32_t>(file);
+            fmt.byteRate      = readLE<uint32_t>(file);
+            fmt.blockAlign    = readLE<uint16_t>(file);
             fmt.bitsPerSample = readLE<uint16_t>(file);
 
             meta.sampleRate    = fmt.sampleRate;
