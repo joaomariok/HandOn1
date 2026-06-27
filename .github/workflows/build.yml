@@ -10,10 +10,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+        uses: egor-tensin/vs-shell@v2
         with:
           arch: x64
 
@@ -29,19 +29,18 @@ jobs:
       - name: Prepare artifact
         run: |
           mkdir artifact\WavTool\src
-          mkdir artifact\WavTool\tests
+          mkdir artifact\WavTool\src\tests
           copy *.h artifact\WavTool\src\
           copy *.cpp artifact\WavTool\src\
-          copy CMakeLists.txt artifact\WavTool\
-          copy CMakePresets.json artifact\WavTool\
+          copy CMakeLists.txt artifact\WavTool\src\
+          copy CMakePresets.json artifact\WavTool\src\
           copy README.md artifact\WavTool\
-          copy .gitignore artifact\WavTool\
-          copy tests\* artifact\WavTool\tests\
+          copy tests\* artifact\WavTool\src\tests\
           copy build\ci\wav_tool.exe artifact\WavTool\
         shell: cmd
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: WavTool-Release
           path: artifact/WavTool/
