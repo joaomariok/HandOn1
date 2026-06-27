@@ -21,26 +21,26 @@ TEST_CASE("readWavFile parses test_file.wav without throwing", "[sanity]") {
 }
 
 TEST_CASE("test_file.wav has expected metadata", "[sanity]") {
-    auto meta = readWavFile(TEST_WAV_PATH);
+    WavMetadata meta = readWavFile(TEST_WAV_PATH);
 
     SECTION("sample rate is 44100 Hz") {
-        REQUIRE(meta.sampleRate == 44100);
+        REQUIRE(meta.fmt.sampleRate == 44100);
     }
 
     SECTION("bit depth is 16 bits") {
-        REQUIRE(meta.bitsPerSample == 16);
+        REQUIRE(meta.fmt.bitsPerSample == 16);
     }
 
     SECTION("channel count is 2 (stereo)") {
-        REQUIRE(meta.numChannels == 2);
+        REQUIRE(meta.fmt.numChannels == 2);
     }
 
-    SECTION("data offset is valid") {
-        REQUIRE(meta.dataOffset > 0);
+    SECTION("data chunk has samples") {
+        REQUIRE(!meta.data.data.empty());
     }
 
     SECTION("data size is non-zero") {
-        REQUIRE(meta.dataSize > 0);
+        REQUIRE(meta.data.header.chunkSize > 0);
     }
 
     SECTION("duration is approximately 29.98 seconds") {
@@ -65,21 +65,19 @@ TEST_CASE("readWavFile error message contains file path", "[error]") {
 TEST_CASE("WavMetadata::duration() computes correctly", "[unit]") {
     SECTION("1 second of 16kHz mono 16-bit audio") {
         WavMetadata meta{};
-        meta.sampleRate = 16000;
-        meta.bitsPerSample = 16;
-        meta.numChannels = 1;
-        meta.dataOffset = 44;
-        meta.dataSize = 32000; // 16000 * 1 * 2 = 32000 bytes/sec
+        meta.fmt.sampleRate = 16000;
+        meta.fmt.bitsPerSample = 16;
+        meta.fmt.numChannels = 1;
+        meta.data.header.chunkSize = 32000; // 16000 * 1 * 2 = 32000 bytes/sec
         REQUIRE_THAT(meta.duration(), Catch::Matchers::WithinAbs(1.0, 0.0001));
     }
 
     SECTION("2.5 seconds of 44100Hz stereo 16-bit audio") {
         WavMetadata meta{};
-        meta.sampleRate = 44100;
-        meta.bitsPerSample = 16;
-        meta.numChannels = 2;
-        meta.dataOffset = 44;
-        meta.dataSize = 441000; // 44100 * 2 * 2 * 2.5 = 441000
+        meta.fmt.sampleRate = 44100;
+        meta.fmt.bitsPerSample = 16;
+        meta.fmt.numChannels = 2;
+        meta.data.header.chunkSize = 441000; // 44100 * 2 * 2 * 2.5 = 441000
         REQUIRE_THAT(meta.duration(), Catch::Matchers::WithinAbs(2.5, 0.0001));
     }
 }

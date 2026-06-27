@@ -1,20 +1,27 @@
 /**
  * @file wav_types.h
- * @brief Data structures for WAV/RIFF file parsing and metadata representation.
+ * @brief Data structures for WAV/RIFF file parsing, writing, and metadata representation.
  *
- * Defines POD structs used throughout the WavTool project for reading, and
- * in future phases, writing and resampling WAV audio files.
+ * Each RIFF envelope (RIFF, fmt, data, extra) is represented by its own struct
+ * with encapsulated size calculations. WavMetadata aggregates all envelopes.
  */
 
 #pragma once
 
 #include <cstdint>
+#include <vector>
 
 /// Size of a RIFF chunk ID in bytes.
 constexpr int CHUNK_ID_SIZE = 4;
 
 /// Size of the base FmtChunk payload in bytes (PCM format, no extensions).
 constexpr uint32_t FMT_BASE_SIZE = 16;
+
+/// Size of a RIFF chunk header in bytes (4-byte ID + 4-byte size field).
+constexpr uint32_t CHUNK_HEADER_SIZE = CHUNK_ID_SIZE + sizeof(uint32_t);
+
+/// Number of bits in one byte, used for bits-to-bytes conversions.
+constexpr uint32_t BITS_PER_BYTE = 8;
 
 /**
  * @brief Generic RIFF chunk header used during chunk-list traversal.
@@ -30,57 +37,112 @@ struct RiffChunkHeader {
 };
 
 /**
- * @brief Represents the payload of the "fmt " sub-chunk in a WAV file.
+ * @brief Represents the RIFF container envelope.
  *
- * Contains the core audio format parameters as defined by the WAV specification.
- * This struct maps directly to the first 16 bytes of the "fmt " chunk payload
- * (PCM format). Extended format chunks may have additional bytes beyond this.
+ * Stores the RIFF chunk ID, payload size, and WAVE form type as read from
+ * the file header.
+ */
+struct RiffEnvelope {
+    /// RIFF chunk identifier ("RIFF"). Not null-terminated.
+    char chunkId[CHUNK_ID_SIZE]{};
+    /// RIFF payload size as read from the file (file size minus 8).
+    uint32_t chunkSize{};
+    /// RIFF form type ("WAVE"). Not null-terminated.
+    char formType[CHUNK_ID_SIZE]{};
+
+    /**
+     * @brief Total file size implied by this RIFF envelope.
+     *
+     * @return 8 (RIFF header) + chunkSize.
+     */
+    uint32_t totalSize() const { return CHUNK_HEADER_SIZE + chunkSize; }
+};
+
+/**
+ * @brief Represents the "fmt " sub-chunk: audio format parameters and any extensions.
+ *
+ * Contains the core 16-byte PCM format fields plus any extension bytes beyond
+ * FMT_BASE_SIZE.
  */
 struct FmtChunk {
     /// Audio format code. 1 = PCM (uncompressed). Other values indicate compression.
-    uint16_t audioFormat;
+    uint16_t audioFormat{};
     /// Number of audio channels (1 = mono, 2 = stereo, etc.).
-    uint16_t numChannels;
+    uint16_t numChannels{};
     /// Sample rate in Hz (e.g., 44100, 48000, 16000).
-    uint32_t sampleRate;
+    uint32_t sampleRate{};
     /// Average bytes per second: sampleRate * numChannels * (bitsPerSample / 8).
-    uint32_t byteRate;
+    uint32_t byteRate{};
     /// Block alignment in bytes: numChannels * (bitsPerSample / 8). Size of one complete sample frame.
-    uint16_t blockAlign;
+    uint16_t blockAlign{};
     /// Bits per sample per channel (e.g., 8, 16, 24, 32).
-    uint16_t bitsPerSample;
+    uint16_t bitsPerSample{};
+    /// Original "fmt " chunk payload size in bytes (>= FMT_BASE_SIZE).
+    uint32_t chunkSize{};
+    /// Extension bytes beyond FMT_BASE_SIZE (e.g. cbSize + codec-specific data).
+    std::vector<uint8_t> extraData;
+
+    /**
+     * @brief Total size of this chunk in the RIFF file, including the 8-byte header.
+     *
+     * @return 8 (header) + chunkSize.
+     */
+    uint32_t totalSize() const { return CHUNK_HEADER_SIZE + ((chunkSize + 1) & ~1u); }
+};
+
+/**
+ * @brief Generic RIFF sub-chunk storing its header and raw payload bytes.
+ *
+ * Used for both the "data" chunk (PCM samples) and any unknown chunks
+ * (LIST, id3, etc.) that need to be preserved in the output.
+ */
+struct RawChunk {
+    /// Chunk header as read from the file.
+    RiffChunkHeader header{};
+    /// Raw payload bytes (PCM samples for "data", opaque bytes for others).
+    std::vector<uint8_t> data;
+
+    /**
+     * @brief Total size of this chunk in the RIFF file, including header and padding.
+     *
+     * @return 8 (header) + header.chunkSize rounded up to even boundary.
+     */
+    uint32_t totalSize() const {
+        return CHUNK_HEADER_SIZE + ((header.chunkSize + 1) & ~1u);
+    }
 };
 
 /**
  * @brief Aggregated metadata extracted from a parsed WAV file.
  *
- * Holds the essential audio properties and the location of PCM data within the file.
- * Designed for reuse across all project phases: reading (phase 1), writing (phase 2),
- * and resampling (phase 3). The dataOffset and dataSize fields allow downstream code
- * to seek directly to the PCM payload without re-parsing the file.
+ * Contains all RIFF envelopes: riff, fmt, data, and any extra chunks. Provides
+ * convenience methods for computing file size and audio duration.
  */
 struct WavMetadata {
-    /// Sample rate in Hz (e.g., 44100, 16000).
-    uint32_t sampleRate;
-    /// Bits per sample per channel (e.g., 16, 24, 32).
-    uint16_t bitsPerSample;
-    /// Number of audio channels (1 = mono, 2 = stereo).
-    uint16_t numChannels;
-    /// Absolute byte offset of the first PCM sample in the file.
-    uint32_t dataOffset;
-    /// Total size of the PCM data payload in bytes.
-    uint32_t dataSize;
+    /// RIFF container envelope.
+    RiffEnvelope riff;
+    /// Parsed "fmt " chunk with audio format parameters and extensions.
+    FmtChunk fmt;
+    /// "data" chunk with PCM audio payload.
+    RawChunk data;
+    /// Non-fmt/non-data RIFF sub-chunks preserved for size parity.
+    std::vector<RawChunk> extraChunks;
 
     /**
-     * @brief Computes the audio duration in seconds from the metadata fields.
+     * @brief Total output file size, derived from the RIFF envelope.
      *
-     * Formula: dataSize / (sampleRate * numChannels * (bitsPerSample / 8))
+     * @return riff.totalSize() (8 + riff.chunkSize).
+     */
+    uint32_t fileSize() const { return riff.totalSize(); }
+
+    /**
+     * @brief Computes the audio duration in seconds.
      *
-     * @return Duration of the audio in seconds as a floating-point value.
+     * @return data payload size / (sampleRate * numChannels * bytesPerSample).
      */
     double duration() const {
-        uint32_t bytesPerSample = bitsPerSample / 8;
-        uint32_t bytesPerSecond = sampleRate * numChannels * bytesPerSample;
-        return static_cast<double>(dataSize) / static_cast<double>(bytesPerSecond);
+        uint32_t bytesPerSample = fmt.bitsPerSample / BITS_PER_BYTE;
+        uint32_t bytesPerSecond = fmt.sampleRate * fmt.numChannels * bytesPerSample;
+        return static_cast<double>(data.header.chunkSize) / static_cast<double>(bytesPerSecond);
     }
 };

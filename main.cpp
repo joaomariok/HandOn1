@@ -7,7 +7,9 @@
  */
 
 #include "wav_reader.h"
+#include "wav_writer.h"
 
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -73,9 +75,9 @@ void printMetadataTable(const WavMetadata& meta) {
     row("Property", "Value");
     hLine(BOX_T_RIGHT, BOX_CROSS, BOX_T_LEFT);
 
-    row("Sample Rate", std::to_string(meta.sampleRate) + " Hz");
-    row("Bit Depth",   std::to_string(meta.bitsPerSample) + " bit");
-    row("Channels",    std::to_string(meta.numChannels));
+    row("Sample Rate", std::to_string(meta.fmt.sampleRate) + " Hz");
+    row("Bit Depth",   std::to_string(meta.fmt.bitsPerSample) + " bit");
+    row("Channels",    std::to_string(meta.fmt.numChannels));
 
     std::ostringstream durStr;
     durStr << std::fixed << std::setprecision(2) << meta.duration() << " s";
@@ -98,14 +100,20 @@ int main(int argc, char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
 #endif
 
-    if (argc != 2) {
-        std::cerr << "Usage: wav_tool <path_to_file.wav>\n";
+    if (argc < 2 || argc > 3) {
+        std::cerr << "Usage: wav_tool <input.wav> [output.wav]\n";
         return 1;
     }
 
     try {
         WavMetadata meta = readWavFile(argv[1]);
         printMetadataTable(meta);
+
+        if (argc == 3) {
+            writeWavFile(argv[2], meta);
+            std::uintmax_t size = std::filesystem::file_size(argv[2]);
+            std::cout << "Output written: " << argv[2] << " (" << size << " bytes)\n";
+        }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
         return 1;

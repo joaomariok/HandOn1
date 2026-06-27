@@ -67,66 +67,85 @@ WavMetadata readWavFile(const std::string& filePath) {
     }
 
     // --- RIFF container envelope ---
-    RiffChunkHeader riffHeader;
-    riffHeader.chunkSize = 0;
-    file.read(riffHeader.chunkId, CHUNK_ID_SIZE);
-    riffHeader.chunkSize = readLE<uint32_t>(file);
+    WavMetadata meta{};
 
-    if (!idEquals(riffHeader.chunkId, RIFF_ID)) {
+    file.read(meta.riff.chunkId, CHUNK_ID_SIZE);
+    meta.riff.chunkSize = readLE<uint32_t>(file);
+
+    if (!idEquals(meta.riff.chunkId, RIFF_ID)) {
         throw std::runtime_error("Not a RIFF file");
     }
 
-    char formType[CHUNK_ID_SIZE];
-    file.read(formType, CHUNK_ID_SIZE);
-    if (!idEquals(formType, WAVE_ID)) {
+    file.read(meta.riff.formType, CHUNK_ID_SIZE);
+    if (!idEquals(meta.riff.formType, WAVE_ID)) {
         throw std::runtime_error("Not a WAVE file");
     }
 
     // --- Walk sub-chunks ---
     bool foundFmt = false;
     bool foundData = false;
-    WavMetadata meta{};
 
-    while (file && !foundData) {
+    std::streamoff riffEnd = static_cast<std::streamoff>(meta.fileSize());
+
+    std::streamoff chunksStart = file.tellg();
+    file.seekg(0, std::ios::end);
+    std::streamoff fileSize = file.tellg();
+    if (fileSize != riffEnd) {
+        throw std::runtime_error("RIFF size mismatch: header says " +
+            std::to_string(riffEnd) + " bytes but file is " +
+            std::to_string(fileSize) + " bytes");
+    }
+    file.seekg(chunksStart);
+
+    while (file.tellg() < riffEnd) {
         RiffChunkHeader subHeader;
         file.read(subHeader.chunkId, CHUNK_ID_SIZE);
         subHeader.chunkSize = readLE<uint32_t>(file);
 
-        if (!file) {
-            break;
-        }
-
         if (idEquals(subHeader.chunkId, FMT_CHUNK_ID)) {
-            if (subHeader.chunkSize < sizeof(FmtChunk)) {
+            if (subHeader.chunkSize < FMT_BASE_SIZE) {
                 throw std::runtime_error("fmt chunk too small");
             }
 
-            FmtChunk fmt;
-            fmt.audioFormat   = readLE<uint16_t>(file);
-            fmt.numChannels   = readLE<uint16_t>(file);
-            fmt.sampleRate    = readLE<uint32_t>(file);
-            fmt.byteRate      = readLE<uint32_t>(file);
-            fmt.blockAlign    = readLE<uint16_t>(file);
-            fmt.bitsPerSample = readLE<uint16_t>(file);
-
-            meta.sampleRate    = fmt.sampleRate;
-            meta.bitsPerSample = fmt.bitsPerSample;
-            meta.numChannels   = fmt.numChannels;
+            meta.fmt.audioFormat   = readLE<uint16_t>(file);
+            meta.fmt.numChannels   = readLE<uint16_t>(file);
+            meta.fmt.sampleRate    = readLE<uint32_t>(file);
+            meta.fmt.byteRate      = readLE<uint32_t>(file);
+            meta.fmt.blockAlign    = readLE<uint16_t>(file);
+            meta.fmt.bitsPerSample = readLE<uint16_t>(file);
+            meta.fmt.chunkSize     = subHeader.chunkSize;
             foundFmt = true;
 
-            // Skip any extra bytes in the fmt chunk beyond FMT_BASE_SIZE
             uint32_t extraBytes = subHeader.chunkSize - FMT_BASE_SIZE;
             if (extraBytes > 0) {
-                file.seekg(extraBytes, std::ios::cur);
+                meta.fmt.extraData.resize(extraBytes);
+                if (!file.read(reinterpret_cast<char*>(meta.fmt.extraData.data()), extraBytes)) {
+                    throw std::runtime_error("Unexpected end of file in fmt chunk");
+                }
             }
         } else if (idEquals(subHeader.chunkId, DATA_CHUNK_ID)) {
-            meta.dataOffset = static_cast<uint32_t>(file.tellg());
-            meta.dataSize   = subHeader.chunkSize;
+            meta.data.header = subHeader;
+            meta.data.data.resize(subHeader.chunkSize);
+            if (!file.read(reinterpret_cast<char*>(meta.data.data.data()), subHeader.chunkSize)) {
+                throw std::runtime_error("Unexpected end of file in data chunk");
+            }
             foundData = true;
+
+            if (subHeader.chunkSize & 1u) {
+                file.seekg(1, std::ios::cur);
+            }
         } else {
-            // Skip unknown chunk; RIFF pads odd-sized chunks to even boundary
-            uint32_t skipSize = (subHeader.chunkSize + 1) & ~1u;
-            file.seekg(skipSize, std::ios::cur);
+            RawChunk extra;
+            extra.header = subHeader;
+            extra.data.resize(subHeader.chunkSize);
+            if (!file.read(reinterpret_cast<char*>(extra.data.data()), subHeader.chunkSize)) {
+                throw std::runtime_error("Unexpected end of file in extra chunk");
+            }
+            meta.extraChunks.push_back(std::move(extra));
+
+            if (subHeader.chunkSize & 1u) {
+                file.seekg(1, std::ios::cur);
+            }
         }
     }
 

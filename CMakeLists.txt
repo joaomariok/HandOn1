@@ -5,6 +5,7 @@ project(WavTool LANGUAGES CXX)
 add_executable(wav_tool
     main.cpp
     wav_reader.cpp
+    wav_writer.cpp
 )
 
 target_compile_features(wav_tool PUBLIC cxx_std_20)
@@ -23,7 +24,9 @@ enable_testing()
 
 add_executable(wav_tests
     tests/test_wav_reader.cpp
+    tests/test_wav_writer.cpp
     wav_reader.cpp
+    wav_writer.cpp
 )
 
 target_compile_features(wav_tests PUBLIC cxx_std_20)

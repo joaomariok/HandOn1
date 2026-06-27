@@ -1,6 +1,6 @@
 # WavTool
 
-A C++20 command-line utility that reads WAV audio files and displays their metadata in a formatted table.
+A C++20 command-line utility that reads WAV audio files, displays their metadata, and copies WAV files preserving all original properties.
 
 > **IMPORTANT:** Update this file after every implementation change.
 > **IMPORTANT:** After every implementation, consider adding or updating tests to cover the new or changed functionality.
@@ -10,7 +10,7 @@ A C++20 command-line utility that reads WAV audio files and displays their metad
 | Phase | Description | Status |
 |-------|-------------|--------|
 | Hands-on 1 | WAV file reading (metadata extraction) | Done |
-| Hands-on 2 | WAV file writing | Pending |
+| Hands-on 2 | WAV file writing | Done |
 | Hands-on 3 | Downsampling/resampling (16 kHz / 16-bit) | Pending |
 
 ## Prerequisites
@@ -45,7 +45,11 @@ If `cmake` is not on your PATH, use the full path from your VS2022 installation:
 ## Usage
 
 ```bash
-wav_tool.exe <path_to_file.wav>
+# Read and display metadata only
+wav_tool.exe <input.wav>
+
+# Read, display, and copy to a new file
+wav_tool.exe <input.wav> <output.wav>
 ```
 
 ### Example Output
@@ -54,11 +58,12 @@ wav_tool.exe <path_to_file.wav>
 ┌─────────────────────────┬───────────────┐
 │ Property                │ Value         │
 ├─────────────────────────┼───────────────┤
-│ Sample Rate             │ 16000 Hz      │
+│ Sample Rate             │ 44100 Hz      │
 │ Bit Depth               │ 16 bit        │
 │ Channels                │ 2             │
-│ Duration                │ 33.53 s       │
+│ Duration                │ 29.98 s       │
 └─────────────────────────┴───────────────┘
+Output written: output.wav (5289194 bytes)
 ```
 
 ## Project Structure
@@ -73,13 +78,16 @@ HandOn1/
 │   └── c_cpp_properties.json  # IntelliSense config (delegates to CMake Tools)
 ├── CMakeLists.txt             # Build configuration (project WavTool, target wav_tool)
 ├── CMakePresets.json           # VS2022 configure + build presets
-├── wav_types.h                 # Data structures: RiffChunkHeader, FmtChunk, WavMetadata
+├── wav_types.h                 # Data structures: RiffEnvelope, FmtChunk, RawChunk, WavMetadata
 ├── wav_reader.h                # WAV parser API declaration
 ├── wav_reader.cpp              # WAV parser implementation (RIFF chunk walking)
+├── wav_writer.h                # WAV writer API declaration
+├── wav_writer.cpp              # WAV writer implementation (RIFF chunk construction)
 ├── main.cpp                    # CLI entry point + formatted table output
 ├── tests/
 │   ├── test_file.wav           # Test WAV file (44100 Hz, 16-bit, stereo)
-│   └── test_wav_reader.cpp     # Catch2 sanity tests for the WAV parser
+│   ├── test_wav_reader.cpp     # Catch2 sanity tests for the WAV parser
+│   └── test_wav_writer.cpp     # Catch2 tests for the WAV writer
 ├── CLAUDE.md                   # Claude Code agent context
 └── README.md                   # This file
 ```
@@ -96,7 +104,7 @@ cmake --build build/vs2022 --config Release
 ctest --test-dir build/vs2022 -C Release --output-on-failure
 ```
 
-Test categories: `[sanity]` (parser vs. test_file.wav), `[error]` (exception handling), `[unit]` (duration calculation).
+Test categories: `[sanity]` (parser vs. test_file.wav), `[error]` (exception handling), `[unit]` (duration calculation), `[writer]` (WAV writer output validation).
 
 ## CI/CD
 
@@ -110,20 +118,31 @@ Artifacts are available in the **Actions** tab of the GitHub repository.
 
 ## Documentation
 
-All source code is documented using **Doxygen** style comments (`/** */` with `@brief`, `@param`, `@return`, `@throws`, etc.). Struct fields use `///` inline comments. File-level `@file` headers are present in every source file.
+All source code is documented using **Doxygen** style comments (`/** */` with `@brief`, `@param`, `@return`, `@throws`, etc.). Struct fields use `///` inline comments. File-level `@file` headers are present in every source file. Explicit types are preferred over `auto` unless the type is a lambda or excessively complex.
 
 ## How It Works
+
+### Reading
 
 The parser implements RIFF chunk traversal — it does **not** use hardcoded byte offsets to locate WAV sub-chunks.
 
 1. Opens the file in binary mode
 2. Reads the 12-byte RIFF container envelope and validates the "RIFF" and "WAVE" signatures
-3. Enters a loop, reading each sub-chunk header (4-byte ID + 4-byte size):
-   - **"fmt " chunk** — extracts audio format, channels, sample rate, bit depth
-   - **"data" chunk** — records the byte offset and size of the PCM audio data
-   - **Unknown chunks** — skips forward by the chunk size (with RIFF even-boundary padding)
+3. Enters a loop bounded by the RIFF payload size, reading each sub-chunk header (4-byte ID + 4-byte size):
+   - **"fmt " chunk** — extracts audio format, channels, sample rate, bit depth, plus any extension bytes
+   - **"data" chunk** — reads the PCM audio samples into memory
+   - **Unknown chunks** — captures them into memory for preservation in the output file
 4. Computes duration: `dataSize / (sampleRate × numChannels × (bitsPerSample / 8))`
 5. Displays results in a Unicode box-drawing table
+
+### Writing
+
+When an output path is provided, the writer constructs a new WAV file from the in-memory structs (no re-reading of the input file):
+
+1. Writes the RIFF header from the stored envelope
+2. Writes the "fmt " chunk field-by-field, including any extension bytes
+3. Writes the "data" chunk with the PCM samples
+4. Writes any captured extra chunks (LIST, id3, etc.) to preserve file size parity
 
 ## Error Handling
 
@@ -139,5 +158,4 @@ The tool reports errors to stderr and exits with code 1 for:
 
 ## Future Phases
 
-- **Hands-on 2** will add WAV file writing capabilities, reusing `WavMetadata` and the existing type definitions
-- **Hands-on 3** will add audio downsampling/resampling to 16 kHz / 16-bit, reading PCM data via `dataOffset`/`dataSize` from `WavMetadata`
+- **Hands-on 3** will add audio downsampling/resampling to 16 kHz / 16-bit, processing PCM data from `WavMetadata::data` and writing the result with updated fmt parameters
