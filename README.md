@@ -35,7 +35,22 @@ cmake --build build/vs2022 --config Debug
 
 # Release
 cmake --build build/vs2022 --config Release
+
+# Rebuild with parallel jobs (faster)
+cmake --build build/vs2022 --config Release --clean-first --parallel
 ```
+
+#### Useful Flags
+
+| Flag | Description |
+|------|-------------|
+| `--config <cfg>` | Build configuration: `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel` |
+| `--clean-first` | Clean before building (rebuild) |
+| `--target <name>` | Build a specific target (e.g. `wav_tool`, `wav_tests`, `clean`) |
+| `--parallel <N>` / `-j <N>` | Number of parallel build jobs |
+| `--verbose` / `-v` | Show compiler commands |
+
+To delete the CMake cache and re-configure from scratch, use `cmake --preset windows-vs2022 --fresh`.
 
 If `cmake` is not on your PATH, use the full path from your VS2022 installation:
 ```
@@ -103,6 +118,14 @@ cmake --build build/vs2022 --config Release
 # Run all tests
 ctest --test-dir build/vs2022 -C Release --output-on-failure
 ```
+
+### Useful Flags
+
+| Flag | Description |
+|------|-------------|
+| `--output-on-failure` | Show test output only when a test fails |
+| `-R <regex>` | Run only tests matching a regex |
+| `-V` / `--verbose` | Show all test output |
 
 Test categories: `[sanity]` (parser vs. test_file.wav), `[error]` (exception handling), `[unit]` (duration calculation), `[writer]` (WAV writer output validation).
 

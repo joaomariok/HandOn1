@@ -51,6 +51,15 @@
             "preLaunchTask": "CMake: Build Debug"
         },
         {
+            "name": "Release Tests",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/vs2022/Release/wav_tests.exe",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Release"
+        },
+        {
             "name": "Attach to Process",
             "type": "cppvsdbg",
             "request": "attach"

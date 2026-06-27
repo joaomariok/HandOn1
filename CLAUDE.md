@@ -33,7 +33,18 @@ cmake --build build/vs2022 --config Debug
 
 # Build (Release)
 cmake --build build/vs2022 --config Release
+
+# Rebuild with parallel jobs (faster)
+cmake --build build/vs2022 --config Release --clean-first --parallel
 ```
+
+Useful build flags:
+- `--config <cfg>` — `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`
+- `--clean-first` — clean before building (rebuild)
+- `--target <name>` — build a specific target (e.g. `wav_tool`, `wav_tests`, `clean`)
+- `--parallel <N>` / `-j <N>` — parallel build jobs
+- `--verbose` / `-v` — show compiler commands
+- `cmake --preset windows-vs2022 --fresh` — delete cache and re-configure from scratch
 
 Run: `build\vs2022\Release\wav_tool.exe <input.wav> [output.wav]`
 
@@ -105,6 +116,7 @@ Run: `build\vs2022\Release\wav_tool.exe <input.wav> [output.wav]`
 - Test WAV path passed via compile definition `TEST_WAV_PATH`
 - Test discovery via `catch_discover_tests()`
 - Run tests: `ctest --test-dir build/vs2022 -C Release --output-on-failure`
+- Useful ctest flags: `--output-on-failure`, `-R <regex>` (filter tests), `-V` (verbose)
 
 Test categories:
 - `[sanity]` — validates parser output against known `test_file.wav` metadata
