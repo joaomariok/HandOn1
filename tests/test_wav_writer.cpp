@@ -26,7 +26,7 @@ struct CleanupGuard {
 
 } // namespace
 
-TEST_CASE("writeWavFile produces a file with the same size as the input", "[writer]") {
+TEST_CASE("writeWavFile produces a file with the same size as the input", "[writer][unit]") {
     CleanupGuard cleanup;
     WavMetadata meta = readWavFile(TEST_WAV_PATH);
     writeWavFile(OUTPUT_PATH, meta);
@@ -36,7 +36,7 @@ TEST_CASE("writeWavFile produces a file with the same size as the input", "[writ
     REQUIRE(outputSize == inputSize);
 }
 
-TEST_CASE("writeWavFile output can be re-parsed with matching metadata", "[writer]") {
+TEST_CASE("writeWavFile output can be re-parsed with matching metadata", "[writer][unit]") {
     CleanupGuard cleanup;
     WavMetadata original = readWavFile(TEST_WAV_PATH);
     writeWavFile(OUTPUT_PATH, original);
@@ -48,7 +48,7 @@ TEST_CASE("writeWavFile output can be re-parsed with matching metadata", "[write
     REQUIRE(reparsed.data.header.chunkSize == original.data.header.chunkSize);
 }
 
-TEST_CASE("writeWavFile throws on invalid output path", "[writer][error]") {
+TEST_CASE("writeWavFile throws on invalid output path", "[writer][unit]") {
     WavMetadata meta = readWavFile(TEST_WAV_PATH);
     REQUIRE_THROWS_AS(writeWavFile("Z:/nonexistent/dir/out.wav", meta), std::runtime_error);
 }

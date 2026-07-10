@@ -1,6 +1,6 @@
 /**
  * @file test_wav_reader.cpp
- * @brief Sanity tests for the WAV/RIFF parser using Catch2 and test_file.wav.
+ * @brief Sanity tests for the WAV/RIFF parser using Catch2 and reference-sample-44100hz-16bit-2ch.wav.
  */
 
 #include <catch2/catch_test_macros.hpp>
@@ -14,13 +14,13 @@
 #error "TEST_WAV_PATH must be defined via CMake"
 #endif
 
-// --- Sanity tests against test_file.wav ---
+// --- Sanity tests against reference-sample-44100hz-16bit-2ch.wav ---
 
-TEST_CASE("readWavFile parses test_file.wav without throwing", "[sanity]") {
+TEST_CASE("readWavFile parses reference-sample-44100hz-16bit-2ch.wav without throwing", "[reader][unit]") {
     REQUIRE_NOTHROW(readWavFile(TEST_WAV_PATH));
 }
 
-TEST_CASE("test_file.wav has expected metadata", "[sanity]") {
+TEST_CASE("reference-sample-44100hz-16bit-2ch.wav has expected metadata", "[reader][unit]") {
     WavMetadata meta = readWavFile(TEST_WAV_PATH);
 
     SECTION("sample rate is 44100 Hz") {
@@ -51,18 +51,18 @@ TEST_CASE("test_file.wav has expected metadata", "[sanity]") {
 
 // --- Error handling tests ---
 
-TEST_CASE("readWavFile throws on non-existent file", "[error]") {
+TEST_CASE("readWavFile throws on non-existent file", "[reader][unit]") {
     REQUIRE_THROWS_AS(readWavFile("nonexistent_file.wav"), std::runtime_error);
 }
 
-TEST_CASE("readWavFile error message contains file path", "[error]") {
+TEST_CASE("readWavFile error message contains file path", "[reader][unit]") {
     REQUIRE_THROWS_WITH(readWavFile("nonexistent_file.wav"),
                         Catch::Matchers::ContainsSubstring("Could not open file"));
 }
 
 // --- WavMetadata::duration() unit tests ---
 
-TEST_CASE("WavMetadata::duration() computes correctly", "[unit]") {
+TEST_CASE("WavMetadata::duration() computes correctly", "[reader][unit]") {
     SECTION("1 second of 16kHz mono 16-bit audio") {
         WavMetadata meta{};
         meta.fmt.sampleRate = 16000;

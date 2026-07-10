@@ -6,7 +6,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/vs2022/Debug/wav_tool.exe",
-            "args": ["tests/test_file.wav"],
+            "args": ["tests/files/reference-sample-44100hz-16bit-2ch.wav"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "preLaunchTask": "CMake: Build Debug"
@@ -16,7 +16,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/vs2022/Release/wav_tool.exe",
-            "args": ["tests/test_file.wav"],
+            "args": ["tests/files/reference-sample-44100hz-16bit-2ch.wav"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "preLaunchTask": "CMake: Build Release"
@@ -27,6 +27,16 @@
             "request": "launch",
             "program": "${workspaceFolder}/build/vs2022/Debug/wav_tool.exe",
             "args": ["${input:wavFilePath}"],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "preLaunchTask": "CMake: Build Debug"
+        },
+        {
+            "name": "Debug wav_tool (type path)",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/build/vs2022/Debug/wav_tool.exe",
+            "args": ["${input:wavFilePathCustom}"],
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
             "preLaunchTask": "CMake: Build Debug"
@@ -68,9 +78,41 @@
     "inputs": [
         {
             "id": "wavFilePath",
+            "type": "pickString",
+            "description": "WAV file to run wav_tool.exe on",
+            "options": [
+                "tests/files/16000hz-16bit-1ch-pcm.wav",
+                "tests/files/22050hz-16bit-1ch-pcm.wav",
+                "tests/files/22050hz-16bit-2ch-pcm.wav",
+                "tests/files/44100hz-16bit-2ch-pcm-1.wav",
+                "tests/files/44100hz-16bit-2ch-pcm-2.wav",
+                "tests/files/44100hz-16bit-2ch-pcm-3.wav",
+                "tests/files/44100hz-32bit-1ch-pcm.wav",
+                "tests/files/48000hz-16bit-1ch-pcm.wav",
+                "tests/files/48000hz-24bit-1ch-pcm.wav",
+                "tests/files/8000hz-12bit-2ch-pcm.wav",
+                "tests/files/8000hz-16bit-1ch-pcm.wav",
+                "tests/files/8000hz-16bit-2ch-pcm.wav",
+                "tests/files/8000hz-24bit-2ch-pcm.wav",
+                "tests/files/8000hz-32bit-2ch-float.wav",
+                "tests/files/8000hz-32bit-2ch-pcm.wav",
+                "tests/files/8000hz-64bit-2ch-float.wav",
+                "tests/files/8000hz-8bit-1ch-pcm.wav",
+                "tests/files/8000hz-8bit-2ch-alaw.wav",
+                "tests/files/8000hz-8bit-2ch-mulaw.wav",
+                "tests/files/8000hz-8bit-2ch-pcm.wav",
+                "tests/files/96000hz-16bit-1ch-pcm.wav",
+                "tests/files/glass-malformed.wav",
+                "tests/files/ptjunk-malformed.wav",
+                "tests/files/reference-sample-44100hz-16bit-2ch.wav"
+            ],
+            "default": "tests/files/reference-sample-44100hz-16bit-2ch.wav"
+        },
+        {
+            "id": "wavFilePathCustom",
             "type": "promptString",
             "description": "Path to WAV file",
-            "default": "tests/test_file.wav"
+            "default": "tests/files/reference-sample-44100hz-16bit-2ch.wav"
         }
     ]
 }

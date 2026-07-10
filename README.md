@@ -1,6 +1,6 @@
 # WavTool
 
-A C++20 command-line utility that reads WAV audio files, displays their metadata, and copies WAV files preserving all original properties.
+A C++20 command-line utility that reads WAV audio files, displays their metadata, copies WAV files preserving all original properties, and converts sample rate / channel count / bit depth.
 
 > **IMPORTANT:** Update this file after every implementation change.
 > **IMPORTANT:** After every implementation, consider adding or updating tests to cover the new or changed functionality.
@@ -11,7 +11,7 @@ A C++20 command-line utility that reads WAV audio files, displays their metadata
 |-------|-------------|--------|
 | Hands-on 1 | WAV file reading (metadata extraction) | Done |
 | Hands-on 2 | WAV file writing | Done |
-| Hands-on 3 | Downsampling/resampling (16 kHz / 16-bit) | Pending |
+| Hands-on 3 | Sample rate / channel / bit depth conversion | Done |
 
 ## Prerequisites
 
@@ -40,17 +40,7 @@ cmake --build build/vs2022 --config Release
 cmake --build build/vs2022 --config Release --clean-first --parallel
 ```
 
-#### Useful Flags
-
-| Flag | Description |
-|------|-------------|
-| `--config <cfg>` | Build configuration: `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel` |
-| `--clean-first` | Clean before building (rebuild) |
-| `--target <name>` | Build a specific target (e.g. `wav_tool`, `wav_tests`, `clean`) |
-| `--parallel <N>` / `-j <N>` | Number of parallel build jobs |
-| `--verbose` / `-v` | Show compiler commands |
-
-To delete the CMake cache and re-configure from scratch, use `cmake --preset windows-vs2022 --fresh`.
+Useful flags: `--config <Debug|Release|RelWithDebInfo|MinSizeRel>`, `--clean-first` (rebuild), `--parallel <N>` (parallel jobs). Full flag reference in [CLAUDE.md](CLAUDE.md#build-instructions).
 
 If `cmake` is not on your PATH, use the full path from your VS2022 installation:
 ```
@@ -63,11 +53,48 @@ If `cmake` is not on your PATH, use the full path from your VS2022 installation:
 # Read and display metadata only
 wav_tool.exe <input.wav>
 
-# Read, display, and copy to a new file
+# Read, display, and copy to a new file (exact copy, all properties preserved)
 wav_tool.exe <input.wav> <output.wav>
+
+# Read, display, and convert to new properties (omitted flags keep the source value)
+wav_tool.exe <input.wav> <output.wav> [--rate N] [--channels N] [--bits N]
 ```
 
-### Example Output
+`--rate` accepts any positive integer (Hz). `--channels` accepts `1` or `2`. `--bits`
+accepts `8`, `16`, `24`, or `32` (integer PCM output only). The source file must be
+integer PCM (8/16/24/32-bit) or 32-bit float PCM — other formats (ADPCM, A-law,
+μ-law, etc.), unsupported channel counts, or invalid/incomplete flags are rejected
+with an error message on stderr and a non-zero exit code.
+
+### Conversion Example
+
+```bash
+wav_tool.exe input.wav output.wav --rate 16000 --channels 1 --bits 8
+```
+
+```
+┌─────────────────────────┬───────────────┐
+│ Property                │ Value         │
+├─────────────────────────┼───────────────┤
+│ Sample Rate             │ 44100 Hz      │
+│ Bit Depth               │ 16 bit        │
+│ Channels                │ 2             │
+│ Duration                │ 29.98 s       │
+└─────────────────────────┴───────────────┘
+
+Output:
+┌─────────────────────────┬───────────────┐
+│ Property                │ Value         │
+├─────────────────────────┼───────────────┤
+│ Sample Rate             │ 16000 Hz      │
+│ Bit Depth               │ 8 bit         │
+│ Channels                │ 1             │
+│ Duration                │ 29.98 s       │
+└─────────────────────────┴───────────────┘
+Output written: output.wav (479680 bytes, 16000 Hz / 8 bit / 1 ch)
+```
+
+### Copy Example
 
 ```
 ┌─────────────────────────┬───────────────┐
@@ -88,23 +115,38 @@ HandOn1/
 ├── .github/
 │   └── workflows/
 │       └── build.yml           # GitHub Actions: build, test, and package on push to main
-├── .gitignore                  # Git ignore rules (build artifacts, IDE, OS files)
+├── .gitignore            # Git ignore rules (build artifacts, IDE, OS files)
 ├── .vscode/
-│   └── c_cpp_properties.json  # IntelliSense config (delegates to CMake Tools)
-├── CMakeLists.txt             # Build configuration (project WavTool, target wav_tool)
-├── CMakePresets.json           # VS2022 configure + build presets
-├── wav_types.h                 # Data structures: RiffEnvelope, FmtChunk, RawChunk, WavMetadata
-├── wav_reader.h                # WAV parser API declaration
-├── wav_reader.cpp              # WAV parser implementation (RIFF chunk walking)
-├── wav_writer.h                # WAV writer API declaration
-├── wav_writer.cpp              # WAV writer implementation (RIFF chunk construction)
-├── main.cpp                    # CLI entry point + formatted table output
+│   ├── c_cpp_properties.json  # IntelliSense config (delegates to CMake Tools)
+│   ├── tasks.json             # Build tasks: CMake configure + build Debug/Release
+│   └── launch.json            # Debug configs for wav_tool.exe / wav_tests.exe (cppvsdbg)
+├── CMakeLists.txt        # Build configuration (project WavTool, targets wav_tool/wav_tests)
+├── CMakePresets.json     # windows-vs2022 (local) + ci (GitHub Actions) presets
+├── wav_types.h           # Data structures: RiffEnvelope, FmtChunk, RawChunk, WavMetadata
+├── wav_reader.h          # WAV parser API declaration
+├── wav_reader.cpp        # WAV parser implementation (RIFF chunk walking)
+├── wav_writer.h          # WAV writer API declaration
+├── wav_writer.cpp        # WAV writer implementation (RIFF chunk construction)
+├── sample_codec.h/.cpp   # PCM<->normalized float decode/encode (8/16/24/32-bit int, 32-bit float)
+├── resampler.h/.cpp      # Linear-interpolation sample rate conversion
+├── channel_mixer.h/.cpp  # Mono<->stereo channel conversion
+├── wav_converter.h/.cpp  # Phase 3 pipeline orchestration + fmt/RIFF regeneration
+├── main.cpp              # CLI entry point + formatted table output + flag parsing
 ├── tests/
-│   ├── test_file.wav           # Test WAV file (44100 Hz, 16-bit, stereo)
+│   ├── files/                   # WAV fixtures, named <rate>hz-<bits>bit-<channels>ch[-<codec>][-N].wav
+│   │   ├── reference-sample-44100hz-16bit-2ch.wav  # CI-wired fixture (TEST_WAV_PATH)
+│   │   └── ...                  # additional fixtures covering other rates/bit depths/channel counts/codecs
+│   ├── test_helpers.h          # Shared fixture-path/scratch-dir/wav_tool.exe-runner helpers (header-only)
 │   ├── test_wav_reader.cpp     # Catch2 sanity tests for the WAV parser
-│   └── test_wav_writer.cpp     # Catch2 tests for the WAV writer
-├── CLAUDE.md                   # Claude Code agent context
-└── README.md                   # This file
+│   ├── test_wav_writer.cpp     # Catch2 tests for the WAV writer
+│   ├── test_sample_codec.cpp   # Catch2 tests for PCM<->float decode/encode
+│   ├── test_resampler.cpp      # Catch2 tests for sample rate conversion
+│   ├── test_channel_mixer.cpp  # Catch2 tests for mono<->stereo conversion
+│   ├── test_wav_converter.cpp  # Catch2 tests for the phase 3 pipeline
+│   ├── test_integration.cpp    # In-process multi-module pipeline tests across the fixture set
+│   └── test_e2e.cpp            # Spawns wav_tool.exe, asserts on stdout/stderr/exit code/output file
+├── CLAUDE.md              # Claude Code agent context
+└── README.md              # This file
 ```
 
 ## Running Tests
@@ -117,17 +159,21 @@ cmake --build build/vs2022 --config Release
 
 # Run all tests
 ctest --test-dir build/vs2022 -C Release --output-on-failure
+
+# Run just one file's tests
+ctest --test-dir build/vs2022 -C Release -L reader --output-on-failure
+
+# Run the whole unit-test superset (everything except integration/e2e)
+ctest --test-dir build/vs2022 -C Release -LE "integration|e2e" --output-on-failure
+
+# Run one broader suite
+ctest --test-dir build/vs2022 -C Release -L integration --output-on-failure
+ctest --test-dir build/vs2022 -C Release -L e2e --output-on-failure
 ```
 
-### Useful Flags
+Useful flags: `--output-on-failure`, `-R <regex>` (filter by name), `-L <label>` (filter by label, one per source file: `reader`, `writer`, `codec`, `resampler`, `mixer`, `converter`, `integration`, `e2e`), `-LE <regex>` (exclude by label).
 
-| Flag | Description |
-|------|-------------|
-| `--output-on-failure` | Show test output only when a test fails |
-| `-R <regex>` | Run only tests matching a regex |
-| `-V` / `--verbose` | Show all test output |
-
-Test categories: `[sanity]` (parser vs. test_file.wav), `[error]` (exception handling), `[unit]` (duration calculation), `[writer]` (WAV writer output validation).
+Each of the 8 test source files owns one CTest label and a matching Catch2 tag (e.g. `test_wav_reader.cpp` → `-L reader`). Test-label mechanics and the fixture/tagging scheme are documented in [CLAUDE.md](CLAUDE.md#testing).
 
 ## CI/CD
 
@@ -139,46 +185,14 @@ A GitHub Actions workflow (`.github/workflows/build.yml`) runs on every push to 
 
 Artifacts are available in the **Actions** tab of the GitHub repository.
 
-## Documentation
-
-All source code is documented using **Doxygen** style comments (`/** */` with `@brief`, `@param`, `@return`, `@throws`, etc.). Struct fields use `///` inline comments. File-level `@file` headers are present in every source file. Explicit types are preferred over `auto` unless the type is a lambda or excessively complex.
-
-## How It Works
-
-### Reading
-
-The parser implements RIFF chunk traversal — it does **not** use hardcoded byte offsets to locate WAV sub-chunks.
-
-1. Opens the file in binary mode
-2. Reads the 12-byte RIFF container envelope and validates the "RIFF" and "WAVE" signatures
-3. Enters a loop bounded by the RIFF payload size, reading each sub-chunk header (4-byte ID + 4-byte size):
-   - **"fmt " chunk** — extracts audio format, channels, sample rate, bit depth, plus any extension bytes
-   - **"data" chunk** — reads the PCM audio samples into memory
-   - **Unknown chunks** — captures them into memory for preservation in the output file
-4. Computes duration: `dataSize / (sampleRate × numChannels × (bitsPerSample / 8))`
-5. Displays results in a Unicode box-drawing table
-
-### Writing
-
-When an output path is provided, the writer constructs a new WAV file from the in-memory structs (no re-reading of the input file):
-
-1. Writes the RIFF header from the stored envelope
-2. Writes the "fmt " chunk field-by-field, including any extension bytes
-3. Writes the "data" chunk with the PCM samples
-4. Writes any captured extra chunks (LIST, id3, etc.) to preserve file size parity
-
 ## Error Handling
 
-The tool reports errors to stderr and exits with code 1 for:
+The tool reports errors to stderr and exits with code 1 for: missing/incorrect CLI
+arguments, a file that isn't a valid RIFF/WAVE container or is missing a required
+chunk, unexpected EOF while parsing, invalid or incomplete `--rate`/`--channels`/`--bits`
+flags, and unsupported source formats for conversion (not integer PCM at 8/16/24/32-bit,
+not 32-bit float PCM, or a channel count other than mono/stereo).
 
-- Missing or incorrect command-line arguments (prints usage)
-- File not found or cannot be opened
-- File is not a valid RIFF container
-- File is RIFF but not WAVE format
-- Missing required "fmt " chunk
-- Missing required "data" chunk
-- Unexpected end of file during parsing
+## Implementation Details
 
-## Future Phases
-
-- **Hands-on 3** will add audio downsampling/resampling to 16 kHz / 16-bit, processing PCM data from `WavMetadata::data` and writing the result with updated fmt parameters
+For architecture, algorithms, design rules, and coding conventions, see [CLAUDE.md](CLAUDE.md).
