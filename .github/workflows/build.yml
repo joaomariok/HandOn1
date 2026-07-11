@@ -28,15 +28,19 @@ jobs:
 
       - name: Prepare artifact
         run: |
+          mkdir artifact\WavTool
+          mkdir artifact\WavTool\bin
           mkdir artifact\WavTool\src
-          mkdir artifact\WavTool\src\tests
-          copy *.h artifact\WavTool\src\
-          copy *.cpp artifact\WavTool\src\
-          copy CMakeLists.txt artifact\WavTool\src\
-          copy CMakePresets.json artifact\WavTool\src\
+          mkdir artifact\WavTool\tests
+          copy CLAUDE.md artifact\WavTool\
+          copy CMakeLists.txt artifact\WavTool\
+          copy CMakePresets.json artifact\WavTool\
+          copy main.cpp artifact\WavTool\
           copy README.md artifact\WavTool\
-          copy tests\* artifact\WavTool\src\tests\
-          copy build\ci\wav_tool.exe artifact\WavTool\
+          copy src\*.h artifact\WavTool\src\
+          copy src\*.cpp artifact\WavTool\src\
+          copy tests\* artifact\WavTool\tests\
+          copy build\ci\wav_tool.exe artifact\WavTool\bin\
         shell: cmd
 
       - name: Upload artifact

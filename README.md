@@ -86,13 +86,14 @@ HandOn1/
 ├── .vscode/
 ├── CMakeLists.txt
 ├── CMakePresets.json
-├── wav_types.h
-├── wav_reader.h / wav_reader.cpp
-├── wav_writer.h / wav_writer.cpp
-├── sample_codec.h / sample_codec.cpp
-├── resampler.h / resampler.cpp
-├── channel_mixer.h / channel_mixer.cpp
-├── wav_converter.h / wav_converter.cpp
+├── src/
+│   ├── wav_types.h
+│   ├── wav_reader.h / wav_reader.cpp
+│   ├── wav_writer.h / wav_writer.cpp
+│   ├── sample_codec.h / sample_codec.cpp
+│   ├── resampler.h / resampler.cpp
+│   ├── channel_mixer.h / channel_mixer.cpp
+│   └── wav_converter.h / wav_converter.cpp
 ├── main.cpp
 ├── tests/
 │   ├── files/              # WAV fixtures, named <rate>hz-<bits>bit-<channels>ch[-<codec>][-N].wav

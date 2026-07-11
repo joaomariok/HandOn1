@@ -26,7 +26,7 @@ CI uses a second preset, `ci` (Ninja generator, no VS install needed) — see CM
 
 Data flow: `main.cpp` → `wav_reader` (parse) → optionally `wav_converter` [`sample_codec` decode → `channel_mixer` → `resampler` → `sample_codec` encode] → `wav_writer`.
 
-### `wav_types.h` — Type definitions (structs with encapsulated size calculations)
+### `src/wav_types.h` — Type definitions (structs with encapsulated size calculations)
 - `CHUNK_ID_SIZE` — constexpr, size of a RIFF chunk ID in bytes (4)
 - `FMT_BASE_SIZE` — constexpr, size of the base FmtChunk payload in bytes (16)
 - `CHUNK_HEADER_SIZE` — constexpr, size of a generic RIFF chunk header in bytes (`CHUNK_ID_SIZE + sizeof(uint32_t)` = 8)
@@ -39,7 +39,7 @@ Data flow: `main.cpp` → `wav_reader` (parse) → optionally `wav_converter` [`
   - `fileSize()` — delegates to `riff.totalSize()`
   - `duration()` — `data.header.chunkSize / (sampleRate * numChannels * bytesPerSample)`
 
-### `wav_reader.h` / `wav_reader.cpp` — WAV parser
+### `src/wav_reader.h` / `src/wav_reader.cpp` — WAV parser
 - **Public API**: `WavMetadata readWavFile(const std::string& filePath)`
 - **Internal helpers** (anonymous namespace):
   - `template<typename T> T readLE(std::ifstream&)` — reads sizeof(T) bytes as little-endian value
@@ -47,7 +47,7 @@ Data flow: `main.cpp` → `wav_reader` (parse) → optionally `wav_converter` [`
 - **Algorithm**: reads RIFF envelope into `meta.riff`, then loops bounded by `riffEnd` reading chunk headers. Populates `meta.fmt`, reads PCM samples into `meta.data.data`, captures unknown chunks into `meta.extraChunks`. File is read once — all data stored in memory.
 - **Errors**: throws `std::runtime_error` for: file not found, not RIFF, not WAVE, RIFF size mismatch (header-declared size doesn't match actual file size), fmt chunk too small (< `FMT_BASE_SIZE`), missing fmt, missing data, unexpected EOF
 
-### `wav_writer.h` / `wav_writer.cpp` — WAV writer
+### `src/wav_writer.h` / `src/wav_writer.cpp` — WAV writer
 - **Public API**: `void writeWavFile(const std::string& outputPath, const WavMetadata& meta)`
 - **Internal helpers** (anonymous namespace):
   - `template<typename T> void writeLE(std::ofstream&, T)` — writes sizeof(T) bytes as little-endian value
@@ -55,24 +55,24 @@ Data flow: `main.cpp` → `wav_reader` (parse) → optionally `wav_converter` [`
 - **Algorithm**: writes RIFF header from `meta.riff`, fmt chunk field-by-field (including any extension bytes), data chunk via `writeRawChunk`, then extra chunks via `writeRawChunk` (unknown chunks like LIST/id3 are re-emitted to preserve output file size parity with the source). No input file re-reading needed.
 - **Errors**: throws `std::runtime_error` for: cannot open output, write errors
 
-### `sample_codec.h` / `sample_codec.cpp` — PCM<->float sample decoding/encoding
+### `src/sample_codec.h` / `src/sample_codec.cpp` — PCM<->float sample decoding/encoding
 - **Public API**: `decodeSamples(pcmBytes, audioFormat, bitsPerSample, numChannels) -> vector<vector<float>>` (one inner vector per channel, normalized to [-1.0, 1.0]); `encodeSamples(channelSamples, targetBits) -> vector<uint8_t>` (always integer PCM output)
 - Supports decode of 8/16/24/32-bit integer PCM (`audioFormat==1`) and 32-bit float PCM (`audioFormat==3`, direct passthrough, no scaling); encode is always integer PCM (8-bit unsigned, 16/24/32-bit signed LE)
 - 16/24/32-bit signed decode/encode share one generic byte-count-parameterized helper; only 8-bit (unsigned) is a special case
 - **Errors**: throws `std::runtime_error` for unsupported (audioFormat, bitsPerSample) combinations or unsupported target bit depths
 - Top-of-file comment states the simplicity (no dithering/noise shaping) is deliberate
 
-### `resampler.h` / `resampler.cpp` — Linear-interpolation sample rate conversion
+### `src/resampler.h` / `src/resampler.cpp` — Linear-interpolation sample rate conversion
 - **Public API**: `resample(channelSamples, srcRate, dstRate) -> vector<vector<float>>`
 - Linear interpolation only, per-channel independent; identity when `srcRate == dstRate`
 - **Note**: aliases on downsampling (no anti-alias filter) — a deliberate, documented tradeoff for this didactic exercise, not a production bandlimited resampler
 
-### `channel_mixer.h` / `channel_mixer.cpp` — Mono<->stereo channel conversion
+### `src/channel_mixer.h` / `src/channel_mixer.cpp` — Mono<->stereo channel conversion
 - **Public API**: `convertChannels(channelSamples, targetChannels) -> vector<vector<float>>`
 - Stereo→mono averages channels; mono→stereo duplicates; only 1↔2 supported
 - **Errors**: throws `std::runtime_error` for unsupported channel counts (source or target)
 
-### `wav_converter.h` / `wav_converter.cpp` — Phase 3 pipeline orchestration
+### `src/wav_converter.h` / `src/wav_converter.cpp` — Phase 3 pipeline orchestration
 - **Public API**: `ConversionOptions` struct (`hasRate`/`rate`, `hasChannels`/`channels`, `hasBits`/`bits`, `any()`); `convertWav(input, opts) -> WavMetadata` — pure in-memory, no I/O
 - **Algorithm**: validates source format (integer PCM 8/16/24/32-bit, or 32-bit float PCM; mono/stereo only) → resolves each target property (flag value or source fallback) → always rebuilds a fresh standard 16-byte PCM `FmtChunk` → runs decode → (channel conversion if needed) → (rate conversion if needed) → encode, skipped entirely if source is already integer PCM and every resolved target equals the source → recomputes `data` header and `riff.chunkSize`
 - Mirrors the `wav_reader`/`wav_writer` split: keeps the graded conversion logic (duration preservation, exact property matching) testable without file I/O or `main()`
@@ -117,13 +117,14 @@ Data flow: `main.cpp` → `wav_reader` (parse) → optionally `wav_converter` [`
   - Configure: `ci` (Ninja generator, `CMAKE_BUILD_TYPE=Release` baked in, build dir: `build/ci`) — GitHub Actions only, no VS install needed
   - Build: `windows-vs2022-debug`, `windows-vs2022-release`, `ci-release`
 - `wav_tests` depends on `wav_tool` via `add_dependencies` (needed for the `[e2e]` tests, which spawn the built executable)
+- Library modules (headers + `.cpp`) live under `src/`; `main.cpp` stays at repo root. Both `wav_tool` and `wav_tests` set `target_include_directories(... PRIVATE ${CMAKE_SOURCE_DIR}/src)` so the flat, non-relative `#include "x.h"` style used throughout the codebase keeps resolving
 
 ## Testing
 
 ### Framework & Targets
 
 - Framework: **Catch2 v3.7.1** (auto-fetched via CMake FetchContent)
-- Test target: `wav_tests` (links `wav_reader.cpp`, `wav_writer.cpp`, `sample_codec.cpp`, `resampler.cpp`, `channel_mixer.cpp`, `wav_converter.cpp` + their `tests/test_*.cpp` files, plus `tests/test_integration.cpp` and `tests/test_e2e.cpp`; `tests/test_helpers.h` is a header-only shared helper, not compiled separately)
+- Test target: `wav_tests` (links `src/wav_reader.cpp`, `src/wav_writer.cpp`, `src/sample_codec.cpp`, `src/resampler.cpp`, `src/channel_mixer.cpp`, `src/wav_converter.cpp` + their `tests/test_*.cpp` files, plus `tests/test_integration.cpp` and `tests/test_e2e.cpp`; `tests/test_helpers.h` is a header-only shared helper, not compiled separately)
 - `wav_tests` has an explicit `add_dependencies(wav_tests wav_tool)` so `wav_tool.exe` is always built before the e2e tests that spawn it
 - Test WAV path passed via compile definition `TEST_WAV_PATH`; `tests/test_integration.cpp`/`tests/test_e2e.cpp` additionally use `TEST_FILES_DIR` (path to `tests/files/`), `WAV_TOOL_EXE` (path to the built `wav_tool.exe`, via `$<TARGET_FILE:wav_tool>`), and `TEST_SCRATCH_DIR` (build-tree scratch directory for generated test output, never committed)
 

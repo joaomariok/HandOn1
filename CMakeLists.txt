@@ -4,15 +4,16 @@ project(WavTool LANGUAGES CXX)
 
 add_executable(wav_tool
     main.cpp
-    wav_reader.cpp
-    wav_writer.cpp
-    sample_codec.cpp
-    resampler.cpp
-    channel_mixer.cpp
-    wav_converter.cpp
+    src/wav_reader.cpp
+    src/wav_writer.cpp
+    src/sample_codec.cpp
+    src/resampler.cpp
+    src/channel_mixer.cpp
+    src/wav_converter.cpp
 )
 
 target_compile_features(wav_tool PUBLIC cxx_std_20)
+target_include_directories(wav_tool PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
 if(MSVC)
     target_compile_options(wav_tool PRIVATE /W4 /WX)
@@ -41,12 +42,12 @@ add_executable(wav_tests
     tests/test_wav_converter.cpp
     tests/test_integration.cpp
     tests/test_e2e.cpp
-    wav_reader.cpp
-    wav_writer.cpp
-    sample_codec.cpp
-    resampler.cpp
-    channel_mixer.cpp
-    wav_converter.cpp
+    src/wav_reader.cpp
+    src/wav_writer.cpp
+    src/sample_codec.cpp
+    src/resampler.cpp
+    src/channel_mixer.cpp
+    src/wav_converter.cpp
 )
 
 target_compile_features(wav_tests PUBLIC cxx_std_20)
@@ -56,7 +57,7 @@ if(MSVC)
 else()
     target_compile_options(wav_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
-target_include_directories(wav_tests PRIVATE ${CMAKE_SOURCE_DIR})
+target_include_directories(wav_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(wav_tests PRIVATE Catch2::Catch2WithMain)
 target_compile_definitions(wav_tests PRIVATE TEST_WAV_PATH="${CMAKE_SOURCE_DIR}/tests/files/reference-sample-44100hz-16bit-2ch.wav")
 target_compile_definitions(wav_tests PRIVATE TEST_FILES_DIR="${CMAKE_SOURCE_DIR}/tests/files")
