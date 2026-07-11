@@ -21,17 +21,20 @@
  *
  * @param filePath Path to the WAV file to parse.
  * @return WavMetadata struct populated with sample rate, bit depth, channel count,
- *         and the absolute offset/size of the PCM data payload.
+ *         and the full PCM data payload (loaded into meta.data.data).
  *
  * @throws std::runtime_error If the file cannot be opened.
  * @throws std::runtime_error If the file is not a valid RIFF container.
  * @throws std::runtime_error If the RIFF form type is not "WAVE".
+ * @throws std::runtime_error If the header-declared RIFF size doesn't match the actual file size.
+ * @throws std::runtime_error If the "fmt " sub-chunk is present but smaller than FMT_BASE_SIZE.
  * @throws std::runtime_error If the "fmt " sub-chunk is missing.
  * @throws std::runtime_error If the "data" sub-chunk is missing.
  * @throws std::runtime_error If an unexpected end-of-file is encountered during parsing.
  *
- * @note The returned WavMetadata includes dataOffset and dataSize, allowing callers
- *       to reopen the file and seek directly to the PCM payload for reading or resampling.
+ * @note The file is read once: PCM samples and any unknown chunks are copied into
+ *       memory (WavMetadata::data and WavMetadata::extraChunks), so callers never
+ *       need to reopen or re-seek the input file.
  *
  * @see WavMetadata
  */

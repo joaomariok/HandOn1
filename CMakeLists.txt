@@ -68,16 +68,9 @@ add_dependencies(wav_tests wav_tool)
 list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
 include(Catch)
 
-# Registered one catch_discover_tests() call per source file (by its Catch2
-# tag), each carrying a single file-level CTest label, so tests can be
-# filtered/printed/run per file (`ctest -L reader`) and `ctest`'s default
-# output groups test names under a "[tag]." title prefix per file.
-# catch_discover_tests's PROPERTIES only reliably forwards single-value
-# labels (multi-value lists like "unit;reader" get flattened into broken
-# tokens by its internal -D/child-script property-forwarding pipeline), so
-# there's no combined "unit" label spanning the six non-integration/e2e
-# files below; run/filter that whole group instead via label-exclude:
-# `ctest -LE "integration|e2e"`.
+# One catch_discover_tests() call per source file, each carrying a single
+# file-level CTest label (`ctest -L reader`, etc). See CLAUDE.md's Testing
+# section for why there's no combined "unit" label across the six files below.
 catch_discover_tests(wav_tests
     TEST_SPEC "[reader]"
     TEST_PREFIX "[unit][reader]"

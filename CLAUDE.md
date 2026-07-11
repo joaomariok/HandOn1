@@ -6,33 +6,13 @@
 
 ## Project Overview
 
-WavTool is a C++20 console application that parses WAV/RIFF audio files, displays metadata, copies WAV files preserving all properties, and converts sample rate / channel count / bit depth (phase 3, final, of a 3-phase project — see README.md for the phase roadmap and CLI usage). No external dependencies, no audio libraries — only C++ standard library headers.
+WavTool is a C++20, dependency-free WAV/RIFF parser, writer, and sample-rate/channel/bit-depth converter — see [README.md](README.md) for what it does and how to run it. This file documents architecture, design rationale, and dev workflow for anyone (human or agent) modifying the code.
 
 ## Build Instructions
 
-Target: Visual Studio 2022, x64. CMake 3.28+ required.
+Target: Visual Studio 2022, x64. CMake 3.28+ required. Basic build commands: see [README.md](README.md#build-instructions).
 
-CMake is bundled with VS2022 at:
-```
-C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe
-```
-
-Commands (use full cmake path if not on PATH):
-```bash
-# Configure
-cmake --preset windows-vs2022
-
-# Build (Debug)
-cmake --build build/vs2022 --config Debug
-
-# Build (Release)
-cmake --build build/vs2022 --config Release
-
-# Rebuild with parallel jobs (faster)
-cmake --build build/vs2022 --config Release --clean-first --parallel
-```
-
-Useful build flags:
+Useful build flags beyond a basic Debug/Release build:
 - `--config <cfg>` — `Debug`, `Release`, `RelWithDebInfo`, `MinSizeRel`
 - `--clean-first` — clean before building (rebuild)
 - `--target <name>` — build a specific target (e.g. `wav_tool`, `wav_tests`, `clean`)
@@ -40,21 +20,22 @@ Useful build flags:
 - `--verbose` / `-v` — show compiler commands
 - `cmake --preset windows-vs2022 --fresh` — delete cache and re-configure from scratch
 
-Run: `build\vs2022\Release\wav_tool.exe <input.wav> [output.wav] [--rate N] [--channels N] [--bits N]`
-
 CI uses a second preset, `ci` (Ninja generator, no VS install needed) — see CMake Structure below.
 
 ## Architecture
 
+Data flow: `main.cpp` → `wav_reader` (parse) → optionally `wav_converter` [`sample_codec` decode → `channel_mixer` → `resampler` → `sample_codec` encode] → `wav_writer`.
+
 ### `wav_types.h` — Type definitions (structs with encapsulated size calculations)
 - `CHUNK_ID_SIZE` — constexpr, size of a RIFF chunk ID in bytes (4)
 - `FMT_BASE_SIZE` — constexpr, size of the base FmtChunk payload in bytes (16)
+- `CHUNK_HEADER_SIZE` — constexpr, size of a generic RIFF chunk header in bytes (`CHUNK_ID_SIZE + sizeof(uint32_t)` = 8)
+- `BITS_PER_BYTE` — constexpr, 8; used for bits-to-bytes conversions (`duration()`, `sample_codec.cpp`)
 - `RiffChunkHeader` — `chunkId[CHUNK_ID_SIZE]` + `chunkSize` (generic 8-byte header)
 - `RiffEnvelope` — RIFF container: `chunkId`, `chunkSize`, `formType`; `totalSize()` returns file size
-- `FmtChunk` — audio format fields + `chunkSize` + `extraData` (extension bytes); `totalSize()` returns 8 + chunkSize
+- `FmtChunk` — audio format fields + `chunkSize` + `extraData` (extension bytes); `totalSize()` returns 8 + chunkSize, padded to an even boundary (same rule as `RawChunk`)
 - `RawChunk` — generic chunk: `RiffChunkHeader header` + `vector<uint8_t> data`; `totalSize()` returns 8 + padded chunkSize. Used for both "data" (PCM samples) and extra chunks (LIST, id3, etc.)
 - `WavMetadata` — aggregates all envelopes: `riff`, `fmt`, `data`, `extraChunks`
-  - `extraChunksSize()` — sum of extra chunk totalSize() (available for external use)
   - `fileSize()` — delegates to `riff.totalSize()`
   - `duration()` — `data.header.chunkSize / (sampleRate * numChannels * bytesPerSample)`
 
@@ -64,7 +45,7 @@ CI uses a second preset, `ci` (Ninja generator, no VS install needed) — see CM
   - `template<typename T> T readLE(std::ifstream&)` — reads sizeof(T) bytes as little-endian value
   - `bool idEquals(const char id[CHUNK_ID_SIZE], const char* tag)` — chunk ID comparison
 - **Algorithm**: reads RIFF envelope into `meta.riff`, then loops bounded by `riffEnd` reading chunk headers. Populates `meta.fmt`, reads PCM samples into `meta.data.data`, captures unknown chunks into `meta.extraChunks`. File is read once — all data stored in memory.
-- **Errors**: throws `std::runtime_error` for: file not found, not RIFF, not WAVE, missing fmt, missing data, unexpected EOF
+- **Errors**: throws `std::runtime_error` for: file not found, not RIFF, not WAVE, RIFF size mismatch (header-declared size doesn't match actual file size), fmt chunk too small (< `FMT_BASE_SIZE`), missing fmt, missing data, unexpected EOF
 
 ### `wav_writer.h` / `wav_writer.cpp` — WAV writer
 - **Public API**: `void writeWavFile(const std::string& outputPath, const WavMetadata& meta)`
@@ -110,7 +91,7 @@ CI uses a second preset, `ci` (Ninja generator, no VS install needed) — see CM
 1. **NO hardcoded byte offsets** — the parser walks the RIFF chunk list dynamically. Never use `seekg` to a magic offset like 12 or 36.
 2. **RIFF chunk padding** — odd-sized chunks are padded to even boundary. Skip size: `(chunkSize + 1) & ~1u`
 3. **Little-endian assumption** — WAV is LE; code uses `memcpy` into native types. This is correct on x64 Windows. Noted in source for future portability.
-4. **No external dependencies** — only `<fstream>`, `<cstdint>`, `<cstring>`, `<string>`, `<stdexcept>`, `<iostream>`, `<iomanip>`, `<sstream>`, `<vector>`, `<filesystem>`
+4. **No external dependencies** — only C++ standard library headers. `<windows.h>` is the sole platform-specific include, `#ifdef _WIN32`-gated in `main.cpp` for UTF-8 console setup so the box-drawing table renders correctly
 5. **Extensibility** — Each RIFF envelope has its own struct with `totalSize()`. `WavMetadata` aggregates all envelopes and provides `fileSize()`, `duration()`. `printMetadataTable()` is a standalone function for reuse.
 6. **Read once** — The reader loads all data into memory (PCM samples, extra chunks). The writer writes from in-memory structs without re-reading the input file.
 7. **No fancy DSP** — `sample_codec`, `resampler`, and `channel_mixer` deliberately use the simplest correct approach (no windowed sinc, no anti-aliasing filter, no dithering/noise shaping). This is a didactic exercise, not a production audio pipeline; each file states this in a top-of-file comment.
@@ -122,7 +103,7 @@ CI uses a second preset, `ci` (Ninja generator, no VS install needed) — see CM
 - `#pragma once` for header guards
 - Doxygen documentation on all structs, functions, templates, and member variables (`/** */` blocks with `@brief`, `@param`, `@return`, `@throws`, `@note`, `@see`; `///` for struct fields)
 - Prefer explicit types over `auto` unless the type is a lambda or excessively complex
-- Inline comments only when the WHY is non-obvious
+- Project-level rationale (design decisions, gotchas, cross-cutting explanations) belongs in this file's Architecture/Key Design Rules/Testing sections, not inline in code — inline `//` comments are reserved for clarifiers that only make sense glued to the one line they annotate (magic-number arithmetic, implicit-branch markers, literal test-fixture-data notes)
 - Minimal error handling — only at system boundaries (file I/O, CLI args)
 - Errors to stderr, non-zero exit code on failure
 - All warnings treated as errors: `/W4 /WX` (MSVC) or `-Wall -Wextra -Wpedantic -Werror` (else), applied to both `wav_tool` and `wav_tests`
@@ -139,18 +120,26 @@ CI uses a second preset, `ci` (Ninja generator, no VS install needed) — see CM
 
 ## Testing
 
+### Framework & Targets
+
 - Framework: **Catch2 v3.7.1** (auto-fetched via CMake FetchContent)
 - Test target: `wav_tests` (links `wav_reader.cpp`, `wav_writer.cpp`, `sample_codec.cpp`, `resampler.cpp`, `channel_mixer.cpp`, `wav_converter.cpp` + their `tests/test_*.cpp` files, plus `tests/test_integration.cpp` and `tests/test_e2e.cpp`; `tests/test_helpers.h` is a header-only shared helper, not compiled separately)
 - `wav_tests` has an explicit `add_dependencies(wav_tests wav_tool)` so `wav_tool.exe` is always built before the e2e tests that spawn it
 - Test WAV path passed via compile definition `TEST_WAV_PATH`; `tests/test_integration.cpp`/`tests/test_e2e.cpp` additionally use `TEST_FILES_DIR` (path to `tests/files/`), `WAV_TOOL_EXE` (path to the built `wav_tool.exe`, via `$<TARGET_FILE:wav_tool>`), and `TEST_SCRATCH_DIR` (build-tree scratch directory for generated test output, never committed)
+
+### Fixtures
+
 - Test fixture WAV files live in `tests/files/`, named `<rate>hz-<bits>bit-<channels>ch[-<codec>][-N].wav` (pure fmt-chunk info; malformed fixtures used for error-path testing are named `<descriptive-name>-malformed.wav` instead, since no fmt is readable; `reference-sample-44100hz-16bit-2ch.wav` is the original CI-wired fixture)
+
+### Tags & Labels
+
 - Test tags follow a clean two-axis scheme: a **type** tag (`[unit]`, `[integration]`, or `[e2e]`) and, for the six unit-suite files only, a **module** tag (`[reader]`, `[writer]`, `[codec]`, `[resampler]`, `[mixer]`, `[converter]`) — e.g. `test_wav_reader.cpp`'s `TEST_CASE`s are all tagged `"[reader][unit]"`. `test_integration.cpp`/`test_e2e.cpp` only need their type tag (`[integration]`/`[e2e]`) since there's one file each, so type and module coincide
-- Test discovery via one `catch_discover_tests()` call **per source file**, each filtered by that file's Catch2 tag via `TEST_SPEC`, with a `TEST_PREFIX` (`"[unit][reader]."`, ..., `"[integration]."`, `"[e2e]."`) and a single-value CTest `LABELS` matching the module/file name (`reader`, `writer`, `codec`, `resampler`, `mixer`, `converter`, `integration`, `e2e`)
+- Test discovery via one `catch_discover_tests()` call **per source file**, each filtered by that file's Catch2 tag via `TEST_SPEC`, with a `TEST_PREFIX` (`"[unit][reader]"`, ..., `"[integration]"`, `"[e2e]"`) and a single-value CTest `LABELS` matching the module/file name (`reader`, `writer`, `codec`, `resampler`, `mixer`, `converter`, `integration`, `e2e`)
 - **Gotcha — no combined `unit` CTest label:** `catch_discover_tests()`'s `PROPERTIES` only reliably forwards **single-value** labels; a multi-value list like `LABELS "unit;reader"` gets flattened into broken tokens by its internal `-D`/child-script property-forwarding pipeline (confirmed via the generated `_tests.cmake`, which wrote `LABELS unit reader` unquoted — `set_tests_properties` then misparses that as extra dangling property names). So the six unit-suite files each keep only their own module label; filter that superset via label-exclude instead: `ctest -LE "integration|e2e"`. The `[unit]` **Catch2 tag** itself is still applied to all of them and works for direct-binary filtering (`wav_tests.exe "[unit]"`), since that's a Catch2-level tag match, not a CTest `PROPERTIES` value
-- Run tests: `ctest --test-dir build/vs2022 -C Release --output-on-failure`
-- Run one file's tests: `ctest --test-dir build/vs2022 -C Release -L reader --output-on-failure` (or `-L writer`, `-L codec`, `-L resampler`, `-L mixer`, `-L converter`, `-L integration`, `-L e2e`)
-- Run the whole unit-test superset: `ctest --test-dir build/vs2022 -C Release -LE "integration|e2e" --output-on-failure`
-- Useful ctest flags: `--output-on-failure`, `-R <regex>` (filter tests), `-L <label>` (filter by one file's label), `-LE <regex>` (exclude by label regex), `--print-labels` (list labels), `-V` (verbose)
+
+### Running Tests
+
+See [README.md](README.md#running-tests) for the `ctest` commands to build and run tests.
 
 Test files (56 tests total):
 - `test_wav_reader.cpp` (5, `[reader][unit]`) — parses the reference fixture, validates its metadata, exception handling for missing files, `WavMetadata::duration()` with synthetic values
